@@ -1,0 +1,138 @@
+[project]
+name = "speckit-linear"
+version = "1.0.0"
+description = "speckit-linear — Linear extension + preset for GitHub Spec Kit. Persists Spec-Driven Development artifacts to Linear via the official Linear MCP server. Tracks upstream github/spec-kit v0.8.10."
+requires-python = ">=3.11"
+dependencies = [
+    # Mirrors upstream specify-cli core dependencies (Constitution P1 — no local changes to upstream surface).
+    "typer>=0.24.0",
+    "click>=8.2.1",
+    "rich",
+    "platformdirs",
+    "readchar",
+    "pyyaml>=6.0",
+    "packaging>=23.0",
+    "pathspec>=0.12.0",
+    "json5>=0.13.0",
+]
+
+[project.scripts]
+# Entry point matches upstream so install-global wrapper + user muscle memory work unchanged.
+specify = "specify_cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/specify_cli"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# Bundle core assets so `specify init` works without network access (air-gapped / enterprise).
+# Vendored verbatim from upstream v0.8.10.
+"templates/checklist-template.md" = "specify_cli/core_pack/templates/checklist-template.md"
+"templates/constitution-template.md" = "specify_cli/core_pack/templates/constitution-template.md"
+"templates/plan-template.md" = "specify_cli/core_pack/templates/plan-template.md"
+"templates/spec-template.md" = "specify_cli/core_pack/templates/spec-template.md"
+"templates/tasks-template.md" = "specify_cli/core_pack/templates/tasks-template.md"
+"templates/vscode-settings.json" = "specify_cli/core_pack/templates/vscode-settings.json"
+"templates/commands" = "specify_cli/core_pack/commands"
+"scripts/bash" = "specify_cli/core_pack/scripts/bash"
+"scripts/powershell" = "specify_cli/core_pack/scripts/powershell"
+"extensions/git" = "specify_cli/core_pack/extensions/git"
+"workflows/speckit" = "specify_cli/core_pack/workflows/speckit"
+"presets/lean" = "specify_cli/core_pack/presets/lean"
+# Local additions: bundle the Linear extension and preset so `specify init`
+# can install them offline (air-gapped / enterprise).
+"extensions/linear/extension.yml" = "specify_cli/core_pack/extensions/linear/extension.yml"
+"extensions/linear/commands" = "specify_cli/core_pack/extensions/linear/commands"
+"extensions/linear/scripts" = "specify_cli/core_pack/extensions/linear/scripts"
+"presets/linear/preset.yml" = "specify_cli/core_pack/presets/linear/preset.yml"
+"presets/linear/commands" = "specify_cli/core_pack/presets/linear/commands"
+
+[project.optional-dependencies]
+# Upstream test extras retained verbatim.
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+# Linear extension runtime dependencies — only loaded when the Linear preset/extension is active.
+linear = [
+    "tenacity>=8",
+    "httpx>=0.27",
+]
+# Developer extras — added by this fork; required to run the full test matrix.
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
+    "vcrpy>=6",
+    "ruff>=0.5",
+]
+
+# Ruff: lint and format only the fork-authored code. Upstream surface
+# (src/specify_cli/** and vendored upstream tests at tests/test_*.py +
+# tests/extensions/** + tests/integrations/** + tests/hooks/**) is
+# byte-for-byte vendored per Constitution P1 and must not be reformatted.
+[tool.ruff]
+exclude = [
+    "src/specify_cli",
+    "tests/test_agent_config_consistency.py",
+    "tests/test_authentication.py",
+    "tests/test_branch_numbering.py",
+    "tests/test_check_tool.py",
+    "tests/test_cli_version.py",
+    "tests/test_console_imports.py",
+    "tests/test_extension_registration.py",
+    "tests/test_extension_skills.py",
+    "tests/test_extension_update_hardening.py",
+    "tests/test_extensions.py",
+    "tests/test_github_http.py",
+    "tests/test_merge.py",
+    "tests/test_presets.py",
+    "tests/test_registrar_path_traversal.py",
+    "tests/test_setup_plan_feature_json.py",
+    "tests/test_setup_tasks.py",
+    "tests/test_timestamp_branches.py",
+    "tests/test_upgrade.py",
+    "tests/test_utils_assets_imports.py",
+    "tests/test_workflows.py",
+    "tests/auth_helpers.py",
+    "tests/extensions",
+    "tests/integrations",
+    "tests/hooks",
+    # Per Phase 1: tests/conftest.py is upstream-conftest augmented with
+    # one fork-local block; the augmented form is fork-authored.
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# tests/conftest.py keeps a sys.path bootstrap block at the top so the
+# Linear extension imports resolve regardless of where pytest is launched.
+# That block intentionally precedes the upstream imports.
+"tests/conftest.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "extensions/linear/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "smoke: per-agent install smoke checks; opt-in CI matrix workflow",
+]
+
+[tool.coverage.run]
+source = ["src", "extensions/linear/scripts", "extensions/linear/hooks"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false

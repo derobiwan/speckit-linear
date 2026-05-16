@@ -1,0 +1,205 @@
+schema_version: "1.0"
+
+extension:
+  id: linear
+  name: "Linear Storage Backend"
+  version: "1.0.0"
+  description: "Persists Spec-Driven Development artifacts (spec, plan, tasks, research, contracts, checklists, constitution) as Linear issues via the official Linear MCP server. Replaces local file storage; designed to be paired with the 'linear' preset."
+  author: speckit-linear
+  repository: https://github.com/derobiwan/speckit-linear
+  license: MIT
+
+requires:
+  # Track upstream v0.8.x — pinned in .specify/upstream.pin.
+  speckit_version: ">=0.8.0"
+  tools:
+    # Constitution P8: Linear MCP server is the only credential boundary.
+    # Constitution P2: Linear-first storage — no local fallback, so this is required.
+    - name: mcp__linear__
+      required: true
+      description: "Linear MCP server (https://mcp.linear.app/mcp) — used for all artifact storage and retrieval."
+
+provides:
+  # The 9 core user-facing commands are NOT redeclared here — they are
+  # overridden through presets/linear/preset.yml (Constitution P6 — single
+  # source of truth). What we declare here are:
+  #
+  # (a) The repair helper (exposed to users as /speckit.linear.repair).
+  # (b) The 3 before-hook resolvers + 9 after-hook persisters referenced
+  #     by the `hooks:` block below. These are not user-invoked directly;
+  #     they're command prompts the runtime fires when a core speckit
+  #     command runs.
+  commands:
+    - name: speckit.linear.repair
+      file: commands/speckit.linear.repair.md
+      description: "Reconcile drift between local state and Linear (re-create missing labels, milestones, or issues; surface orphaned tasks)."
+    - name: speckit.linear.migrate
+      file: commands/speckit.linear.migrate.md
+      description: "Relabel a legacy Linear backlog with the dual speckit:* + feature:NNN-name convention (idempotent, in-place). Also routed as alias from /speckit.migrate via preset (FR-010)."
+    - name: speckit.linear.baseline
+      file: commands/speckit.linear.baseline.md
+      description: "Analyze an existing source directory and persist a [SPEC] issue describing the discovered features. Also routed as alias from /speckit.baseline via preset (FR-010)."
+    - name: speckit.linear.upgrade-from-v051
+      file: commands/speckit.linear.upgrade-from-v051.md
+      description: "Detect and archive v0.5.1 legacy artefacts under .specify/legacy-v051/, preserving .specify/config/linear.md (R6)."
+
+    # ---- Before-hook resolvers ----
+    - name: speckit.linear.resolve-active-feature
+      file: commands/speckit.linear.resolve-active-feature.md
+      description: "Locate the active feature label and verify prerequisite Linear artifacts exist."
+    - name: speckit.linear.resolve-product-project
+      file: commands/speckit.linear.resolve-product-project.md
+      description: "Locate or create the product project in Linear before specify runs."
+    - name: speckit.linear.resolve-constitution-project
+      file: commands/speckit.linear.resolve-constitution-project.md
+      description: "Locate or create the speckit-constitution project before constitution work."
+
+    # ---- After-hook persisters ----
+    - name: speckit.linear.persist-spec
+      file: commands/speckit.linear.persist-spec.md
+      description: "Persist the [SPEC] issue + feature label + initial quality checklist."
+    - name: speckit.linear.persist-clarifications
+      file: commands/speckit.linear.persist-clarifications.md
+      description: "Update the [SPEC] issue body with clarification answers."
+    - name: speckit.linear.persist-plan
+      file: commands/speckit.linear.persist-plan.md
+      description: "Persist [PLAN], [RESEARCH], [DATA-MODEL], [CONTRACT], [QUICKSTART] issues."
+    - name: speckit.linear.persist-tasks
+      file: commands/speckit.linear.persist-tasks.md
+      description: "Persist phase milestones and task issues with dual labels."
+    - name: speckit.linear.persist-checklist
+      file: commands/speckit.linear.persist-checklist.md
+      description: "Create or update a [CHECKLIST] issue."
+    - name: speckit.linear.persist-analysis-report
+      file: commands/speckit.linear.persist-analysis-report.md
+      description: "Post the analysis report as a comment on the [SPEC] issue."
+    - name: speckit.linear.persist-implementation-status
+      file: commands/speckit.linear.persist-implementation-status.md
+      description: "Update task issue statuses as implementation progresses."
+    - name: speckit.linear.persist-constitution
+      file: commands/speckit.linear.persist-constitution.md
+      description: "Write the amended constitution body back to its Linear issue."
+    - name: speckit.linear.persist-backlog-migration
+      file: commands/speckit.linear.persist-backlog-migration.md
+      description: "Convert tasks.md into Linear task issues + milestones."
+
+  config:
+    - name: "linear-config.yml"
+      template: "config-template.yml"
+      description: "Linear extension runtime configuration (workspace, team, label conventions, logging)."
+      required: false
+
+# 9 core commands × {before, after} = 18 hooks (FR-018, Contract C2).
+#
+# Hooks run *before* a core command (resolve active feature, ensure labels)
+# and *after* (persist any side-effects, update issue links). The hook
+# command refs point at namespaced helpers under speckit.linear.*; these
+# helpers are private (not user-invoked) and are not redeclared in
+# `provides.commands` because they are implemented in scripts/ and resolved
+# by the runtime via the local file path declared in the hook config.
+hooks:
+  before_constitution:
+    command: speckit.linear.resolve-constitution-project
+    optional: false
+    description: "Ensure the speckit-constitution project exists in Linear before constitution work."
+  after_constitution:
+    command: speckit.linear.persist-constitution
+    optional: false
+    description: "Write or update the [CONSTITUTION] issue with the rendered constitution content."
+
+  before_specify:
+    command: speckit.linear.resolve-product-project
+    optional: false
+    description: "Ensure the product project exists in Linear before creating a spec."
+  after_specify:
+    command: speckit.linear.persist-spec
+    optional: false
+    description: "Create the [SPEC] issue + feature label + initial requirements quality checklist."
+
+  before_clarify:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate the active feature's [SPEC] issue."
+  after_clarify:
+    command: speckit.linear.persist-clarifications
+    optional: false
+    description: "Update the [SPEC] issue description with the Clarifications section."
+
+  before_plan:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate the active feature and verify the spec exists."
+  after_plan:
+    command: speckit.linear.persist-plan
+    optional: false
+    description: "Create [PLAN], [RESEARCH], [DATA-MODEL], [CONTRACT], [QUICKSTART] issues."
+
+  before_tasks:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate the active feature and verify the plan exists."
+  after_tasks:
+    command: speckit.linear.persist-tasks
+    optional: false
+    description: "Create phase milestones and task issues with dual labels (speckit:task + feature:NNN-name)."
+
+  before_checklist:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate the active feature for checklist association."
+  after_checklist:
+    command: speckit.linear.persist-checklist
+    optional: false
+    description: "Create [CHECKLIST] issue with the generated quality items."
+
+  before_analyze:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate spec, plan, tasks, and checklist issues for analysis."
+  after_analyze:
+    command: speckit.linear.persist-analysis-report
+    optional: false
+    description: "Post the analysis report as a comment on the [SPEC] issue (read-only otherwise)."
+
+  before_implement:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate task issues to implement."
+  after_implement:
+    command: speckit.linear.persist-implementation-status
+    optional: false
+    description: "Update task issue status as work completes (in-progress / completed)."
+
+  before_taskstoissues:
+    command: speckit.linear.resolve-active-feature
+    optional: false
+    description: "Locate active feature for backlog migration."
+  after_taskstoissues:
+    command: speckit.linear.persist-backlog-migration
+    optional: false
+    description: "Create task issues + milestones from a hand-curated tasks.md."
+
+tags:
+  - "linear"
+  - "storage"
+  - "issue-tracker"
+  - "remote-first"
+
+config:
+  defaults:
+    # Default logging directory; overridable via linear-config.yml.
+    log_dir: ".specify/logs"
+    # Bounded retry policy applied by extensions/linear/scripts/linear_mcp_client.py.
+    # See Contract C4 + Research R3 for rationale (1s/2s/4s backoff, ±25% jitter).
+    max_retry_attempts: 3
+    initial_backoff_seconds: 1.0
+    jitter_percent: 0.25
+    transient_http_statuses:
+      - 429
+      - 500
+      - 502
+      - 503
+      - 504
+    # Verbosity for the stderr logger (file logger is always DEBUG).
+    # Overridable via SPECIFY_VERBOSITY env var (0=WARN, 1=INFO, 2=DEBUG).
+    verbosity: 0

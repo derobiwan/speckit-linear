@@ -1,0 +1,101 @@
+# Pre-commit hooks — see https://pre-commit.com/
+# Run: `pre-commit install` after `uv pip install -e ".[dev]"` to enable.
+#
+# Implements:
+# - T020: gitleaks secret scan (Spec FR-029, SC-006)
+# - T055: upstream-sync invariant — hooks MUST NOT modify vendored dirs
+#         (Constitution P1 NON-NEGOTIABLE). The `exclude:` regex on each
+#         mutating hook skips vendored paths so pre-commit can't drift
+#         the fork away from the upstream pin.
+# - T072: docs-update gate (Constitution P9) — landed in Final Phase
+
+# ---------------------------------------------------------------------------
+# Vendored upstream paths — keep this in sync with tests/upstream-sync/
+# test_src_specify_cli_unmodified.py::VENDORED_DIRS.
+#
+# Any pre-commit hook that *modifies* files (trailing-whitespace,
+# end-of-file-fixer, ruff, markdownlint, …) must apply this exclude so
+# the upstream-sync diff test stays green.
+# ---------------------------------------------------------------------------
+# Anchored at repo root; matches any file beneath one of the vendored
+# top-level paths plus the legacy v0.5.1 fixture directory (which
+# intentionally seeds whitespace-sensitive layouts).
+_vendored_exclude: &vendored_exclude |
+  (?x)^(
+    src/specify_cli/.*|
+    templates/commands/.*|
+    integrations/.*|
+    extensions/(git|selftest|template)/.*|
+    extensions/[^/]+\.md|
+    presets/(lean|scaffold|self-test)/.*|
+    presets/[^/]+\.md|
+    workflows/[^/]+\.md|
+    scripts/(bash|powershell)/.*|
+    tests/cli/fixtures/v051-sample-repo/.*
+  )$
+
+repos:
+  # Secret scan (T020) — blocks commits containing OAuth tokens, GitHub PATs,
+  # Linear workspace IDs, or RFC 5322 email addresses.
+  #
+  # We use a `system` language hook (rather than pre-commit's Go-install path)
+  # because the Go module proxy can be unreliable. Install gitleaks once with
+  # `brew install gitleaks` (macOS) or your distro's package manager.
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks (scan staged files for secrets)
+        language: system
+        entry: gitleaks
+        args: ["protect", "--staged", "--config", ".gitleaks.toml", "--verbose"]
+        pass_filenames: false
+        types: [text]
+
+  # Standard hygiene — mutating hooks honor the vendored exclude.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: *vendored_exclude
+      - id: end-of-file-fixer
+        exclude: *vendored_exclude
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # Python formatting + lint — only fork-authored Python.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        exclude: *vendored_exclude
+      - id: ruff-format
+        exclude: *vendored_exclude
+
+  # Markdown lint for the documentation we maintain (constitution P9).
+  # Vendored markdown stays as upstream authored it.
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.14.0
+    hooks:
+      - id: markdownlint-cli2
+        args: ["--fix"]
+        exclude: *vendored_exclude
+
+  # Docs-update gate (T072, Constitution P9) — code-affecting changes
+  # must ship with at least one user-facing doc update in the same
+  # commit. `[skip-docs]` in the commit message is the audited escape
+  # hatch. The hook is a `system` Python script so it runs without an
+  # activated venv — see scripts/maintainer/docs_update_gate.py.
+  - repo: local
+    hooks:
+      - id: docs-update-gate
+        name: docs-update gate (P9)
+        language: system
+        entry: python3 scripts/maintainer/docs_update_gate.py --commit-msg-file .git/COMMIT_EDITMSG --
+        pass_filenames: true
+        # Run on every staged file; the gate itself decides what to gate.
+        types: [file]

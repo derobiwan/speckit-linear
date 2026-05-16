@@ -1,0 +1,133 @@
+---
+# T051: 30-agent install smoke matrix (FR-020, SC-002).
+#
+# Runs `specify init --integration <agent> --preset linear` against every
+# integration in upstream's INTEGRATION_REGISTRY, asserting that:
+#   1. install exits 0;
+#   2. .specify/ scaffold is materialised;
+#   3. presets/linear/ is present (the --preset flag was honoured);
+#   4. for the five full-assertion agents (claude/codex/gemini/copilot/
+#      opencode) the agent-specific command path also exists.
+#
+# Concurrency budget (R7): `max-parallel: 6` keeps the wall-clock under
+# SC-008's 5-minute total budget while staying inside GitHub's free-tier
+# concurrent-runner ceiling. The uv venv is cached between matrix entries
+# via the `pyproject.toml` hash so first-run cost amortises.
+name: agent-matrix
+on:
+  push:
+    branches:
+      - main
+      - 'upstream-sync-*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        agent:
+          - agy
+          - amp
+          - auggie
+          - bob
+          - claude
+          - codebuddy
+          - codex
+          - copilot
+          - cursor-agent
+          - devin
+          - forge
+          - gemini
+          - goose
+          - iflow
+          - junie
+          - kilocode
+          - kimi
+          - kiro-cli
+          - lingma
+          - opencode
+          - pi
+          - qodercli
+          - qwen
+          - roo
+          - shai
+          - tabnine
+          - trae
+          - vibe
+          - windsurf
+          # `generic` excluded — requires extra --ai-commands-dir flag;
+          # exercised in tests/integrations/ instead.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Create venv and install
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,linear]"
+
+      - name: Smoke install for ${{ matrix.agent }}
+        env:
+          NO_COLOR: "1"
+          CI: "1"
+        run: |
+          source .venv/bin/activate
+          python -m pytest \
+            tests/smoke/test_30_agent_matrix.py \
+            -k "test_30_agent_install_smoke[${{ matrix.agent }}]" \
+            -v --tb=short
+
+  matrix-meta:
+    # Cheap parallel check that runs once: matrix size + full-assertion
+    # roster stay in sync with the registry.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Create venv and install
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,linear]"
+
+      - name: Sanity checks
+        run: |
+          source .venv/bin/activate
+          python -m pytest \
+            tests/smoke/test_30_agent_matrix.py::test_matrix_size_matches_upstream \
+            tests/smoke/test_30_agent_matrix.py::test_full_assertion_agents_known \
+            -v --tb=short

@@ -1,0 +1,24 @@
+name: Agent Runtime Request
+description: Request support for a new agent runtime
+labels: ["agent-runtime"]
+body:
+  - type: input
+    id: agent_name
+    attributes:
+      label: Agent Name
+      description: Name of the AI coding agent
+      placeholder: e.g., Cursor, Windsurf, Tabnine
+    validations:
+      required: true
+  - type: textarea
+    id: command_format
+    attributes:
+      label: Command Format
+      description: How does this agent define commands/skills? (e.g., markdown files, TOML, YAML)
+    validations:
+      required: true
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation Links
+      description: Links to the agent's command/skill documentation

@@ -1,0 +1,86 @@
+---
+# T056 — Upstream-sync CI gate (Constitution P1 / FR-014 / SC-004).
+#
+# Runs T055's diff test against the upstream commit pinned in
+# .specify/upstream.pin. Any drift in vendored directories
+# (src/specify_cli, templates/commands, integrations, the upstream
+# extensions/presets/scripts trees) fails the build, blocking the PR
+# from being merged.
+#
+# The upstream clone is cached by .specify/upstream.pin hash so that
+# repeat runs on the same pin reuse the same shallow clone (≈ 30 s
+# saved per run).
+name: upstream-sync
+on:
+  push:
+    branches:
+      - main
+      - 'upstream-sync-*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+# Treat the gate as required for merge by enabling it in branch
+# protection. Workflow status is exposed as "upstream-sync / verify".
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history isn't needed — the diff test fetches the pinned
+          # upstream ref into a separate clone.
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Read upstream pin
+        id: pin
+        run: |
+          pin_hash=$(sha256sum .specify/upstream.pin | awk '{print $1}')
+          echo "hash=$pin_hash" >> "$GITHUB_OUTPUT"
+          echo "pin file hash: $pin_hash"
+          echo "pin contents:"
+          cat .specify/upstream.pin
+
+      - name: Cache upstream clone
+        id: upstream-cache
+        uses: actions/cache@v5
+        with:
+          # Path is the per-session pytest cache root used by the
+          # session-scoped clone fixture; we hint the test to land
+          # there by setting SPECKIT_UPSTREAM_CACHE_DIR below.
+          path: .cache/upstream-spec-kit
+          key: upstream-spec-kit-${{ steps.pin.outputs.hash }}-v1
+
+      - name: Create venv and install
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,linear]"
+
+      - name: Run upstream-sync diff test
+        env:
+          # Turn the test's "skip on missing network/git" branches into
+          # hard failures so a flaky checkout fails fast instead of
+          # silently passing.
+          SPECKIT_REQUIRE_UPSTREAM_SYNC: "1"
+          NO_COLOR: "1"
+        run: |
+          source .venv/bin/activate
+          python -m pytest tests/upstream-sync/ -v --tb=short

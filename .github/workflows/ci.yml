@@ -1,0 +1,83 @@
+---
+name: CI/CD
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  issue_comment:
+    types:
+      - created
+  pull_request_review_comment:
+    types:
+      - created
+  issues:
+    types:
+      - opened
+      - assigned
+  pull_request_review:
+    types:
+      - submitted
+  workflow_dispatch:  # checkov:skip=CKV_GHA_7:workflow_dispatch inputs are required for manual runs
+    inputs:
+      workflow:
+        required: true
+        type: choice
+        options:
+          - update
+        description: Choose the workflow to run
+        default: update
+jobs:
+  claude-code-review:
+    if: >
+      github.event_name == 'pull_request'
+      && github.event.pull_request.draft == false
+      && (! endswith(github.event.pull_request.user.login, '[bot]'))
+      && (! startsWith(github.head_ref, 'dependabot/'))
+      && (! startsWith(github.head_ref, 'renovate/'))
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    # TODO: Pin to SHA for production use (currently @main for rapid iteration on own-org repo)
+    uses: dceoy/gh-actions-for-devops/.github/workflows/claude-code-review.yml@main   # zizmor: ignore[unpinned-uses]
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  claude-code-bot:
+    if: >
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+      || (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      || (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+      || (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    # TODO: Pin to SHA for production use (currently @main for rapid iteration on own-org repo)
+    uses: dceoy/gh-actions-for-devops/.github/workflows/claude-code-bot.yml@main  # zizmor: ignore[unpinned-uses]
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # dependabot-auto-merge: REMOVED — `.github/dependabot.yml` was deleted
+  # in favour of Renovate (`.github/renovate.json`). Renovate has its own
+  # automerge configuration baked into the config file
+  # (`automergeType: branch` for minor/patch/digest updates).
+  # If Dependabot is re-introduced later, restore this job alongside
+  # `.github/dependabot.yml` in the same commit.
+
+  # speckit-init: DISABLED — skill files are manually maintained with Linear
+  # integration and must not be regenerated from the upstream spec-kit CLI.
+  # The upstream `specify init --force --here --ai` would overwrite our
+  # Linear-based customizations with local-file-based versions.

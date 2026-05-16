@@ -1,0 +1,89 @@
+schema_version: "1.0"
+
+preset:
+  id: "linear"
+  name: "Linear Storage Backend"
+  version: "1.0.0"
+  description: "Replaces local-file storage with Linear-as-storage-backend. Pairs with the 'linear' extension. All Spec-Driven Development artifacts persist as Linear issues with dual labels (speckit:* + feature:NNN-name)."
+  author: "speckit-linear"
+  repository: "https://github.com/derobiwan/speckit-linear"
+  license: "MIT"
+
+requires:
+  speckit_version: ">=0.8.0"
+
+# Each override uses strategy='wrap' (Constitution P6 — single source of
+# truth). Upstream owns the core command templates in templates/commands/;
+# this preset prepends Linear-specific setup and appends Linear-specific
+# persistence guidance, so upstream improvements to the core templates flow
+# through automatically (no parallel hand-edits per agent).
+provides:
+  templates:
+    - type: "command"
+      name: "speckit.specify"
+      file: "commands/speckit.specify.md"
+      strategy: "wrap"
+      replaces: "speckit.specify"
+      description: "Wrap specify with Linear: resolve/create product project, create [SPEC] issue + feature label."
+
+    - type: "command"
+      name: "speckit.plan"
+      file: "commands/speckit.plan.md"
+      strategy: "wrap"
+      replaces: "speckit.plan"
+      description: "Wrap plan with Linear: create [PLAN], [RESEARCH], [DATA-MODEL], [CONTRACT], [QUICKSTART] issues."
+
+    - type: "command"
+      name: "speckit.tasks"
+      file: "commands/speckit.tasks.md"
+      strategy: "wrap"
+      replaces: "speckit.tasks"
+      description: "Wrap tasks with Linear: create phase milestones and task issues with dual labels."
+
+    - type: "command"
+      name: "speckit.clarify"
+      file: "commands/speckit.clarify.md"
+      strategy: "wrap"
+      replaces: "speckit.clarify"
+      description: "Wrap clarify with Linear: update [SPEC] issue description with Clarifications section."
+
+    - type: "command"
+      name: "speckit.analyze"
+      file: "commands/speckit.analyze.md"
+      strategy: "wrap"
+      replaces: "speckit.analyze"
+      description: "Wrap analyze with Linear: post analysis report as a comment on the [SPEC] issue."
+
+    - type: "command"
+      name: "speckit.checklist"
+      file: "commands/speckit.checklist.md"
+      strategy: "wrap"
+      replaces: "speckit.checklist"
+      description: "Wrap checklist with Linear: create [CHECKLIST] issue with dual labels."
+
+    - type: "command"
+      name: "speckit.implement"
+      file: "commands/speckit.implement.md"
+      strategy: "wrap"
+      replaces: "speckit.implement"
+      description: "Wrap implement with Linear: update task issue status as work progresses."
+
+    - type: "command"
+      name: "speckit.constitution"
+      file: "commands/speckit.constitution.md"
+      strategy: "wrap"
+      replaces: "speckit.constitution"
+      description: "Wrap constitution with Linear: persist constitution in the speckit-constitution Linear project."
+
+    - type: "command"
+      name: "speckit.taskstoissues"
+      file: "commands/speckit.taskstoissues.md"
+      strategy: "wrap"
+      replaces: "speckit.taskstoissues"
+      description: "Wrap taskstoissues with Linear: convert a hand-curated tasks.md into Linear task issues + milestones."
+
+tags:
+  - "linear"
+  - "storage"
+  - "remote-first"
+  - "workflow"

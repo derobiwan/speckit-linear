@@ -1,0 +1,59 @@
+# gitleaks configuration for speckit-linear (T020).
+# Custom rules in addition to the default gitleaks rule pack.
+#
+# Patterns mirror those in extensions/linear/scripts/redacting_filter.py so
+# the pre-commit gate and the runtime scrubber detect the same things.
+
+title = "speckit-linear secret patterns"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "linear-workspace-uuid-suspicious"
+description = "RFC 4122 UUID — flag for review because Linear workspace IDs follow this shape"
+regex = '''\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'''
+tags = ["uuid", "linear"]
+# Allow UUIDs that appear only inside test files / cassettes / vendored
+# upstream code (scrubbed where they matter; literal in tests by design).
+[rules.allowlist]
+paths = [
+    '''extensions/linear/tests/fixtures/recorded_mcp_responses/''',
+    '''tests/backward-compat/v051-snapshot\.json''',
+    # Test fixtures may literal-include UUIDs to assert redaction works.
+    '''extensions/linear/tests/.*\.py''',
+    '''tests/.*\.py''',
+    # Upstream src/specify_cli/ is byte-for-byte vendored (Constitution P1).
+    '''src/specify_cli/''',
+    # Runtime caches and pyc artifacts — not source.
+    '''\.pytest_cache/''',
+    '''.*\.pyc$''',
+    '''__pycache__/''',
+    '''\.venv/''',
+    '''node_modules/''',
+    # Memory-keeper DB artifacts (gitignored but reachable from --no-git scan).
+    '''context\.db.*''',
+]
+
+[allowlist]
+description = "Project-wide allowlist for documentation examples and redaction-test fixtures"
+# Examples in docs that reference token *shapes* but not real secrets.
+paths = [
+    '''README\.md''',
+    '''docs/''',
+    '''extensions/.*EXTENSION-.*\.md''',
+    '''CHANGELOG\.md''',
+    '''CONTRIBUTING\.md''',
+    # The redacting-filter test feeds synthetic GitHub PATs / bearer
+    # tokens / Linear UUIDs into the redactor and asserts the placeholder
+    # comes back. Those literals are required by the test contract and
+    # are not real credentials. Allowlist the file globally so gitleaks
+    # doesn't flag them in CI full-tree scans (the local pre-commit hook
+    # only scans the staged diff, which is why this wasn't surfaced
+    # until the GitHub-side run).
+    '''extensions/linear/tests/unit/test_redacting_filter\.py''',
+]
+# Allow our own placeholder format.
+regexes = [
+    '''<TOKEN_[0-9a-f]{6}>''',
+]

@@ -1,0 +1,52 @@
+name: Bug Report
+description: Report a bug with a skill or Linear integration
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: skill
+    attributes:
+      label: Skill
+      options:
+        - speckit-specify
+        - speckit-plan
+        - speckit-tasks
+        - speckit-clarify
+        - speckit-analyze
+        - speckit-checklist
+        - speckit-constitution
+        - speckit-implement
+        - speckit-baseline
+        - speckit-migrate
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Claude Code
+        - Codex CLI
+        - Gemini CLI
+        - GitHub Copilot
+        - OpenCode
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the issue?
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Error messages, screenshots, or other relevant information

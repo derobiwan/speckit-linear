@@ -1,0 +1,72 @@
+# Upstream Notes
+
+> Living record of upstream PRs filed (or pending) against
+> [github/spec-kit](https://github.com/github/spec-kit) by this fork.
+> Constitution P1 (NON-NEGOTIABLE) requires that any divergence from
+> upstream's `src/specify_cli/` be filed as an upstream PR and tracked
+> here — local patches are forbidden.
+
+Upstream baseline: **v0.8.10** — commit `0e5b59fcaa1deb976c1f73b47c743de1cf5a5d71`.
+
+---
+
+## T048 — `specify init --preset linear --extension linear` verification
+
+**Date verified**: 2026-05-15
+**Branch**: `upstream-sync-0.8.10`
+**Outcome**: The full Contract C1 surface is **not yet present in upstream
+v0.8.10**. Smoke run on a freshly built venv:
+
+```text
+$ specify init --ignore-agent-tools --integration claude \
+               --preset linear --extension linear --no-git /tmp/proj
+Error: No such option: --extension
+```
+
+`--preset linear` *alone* succeeds and installs the bundled
+`presets/linear/` correctly — the gap is the new flag surface required
+by [PMO-76 Contract C1](https://linear.app/pmo-to-do-list/issue/PMO-76),
+not the preset itself.
+
+### Upstream gaps to land via PR
+
+1. **`--extension <name>` flag** (repeatable). Mirrors `--preset` and
+   lets `specify init` install one or more extensions in the same call.
+2. **`--preset` becomes repeatable** (list[str] not str).
+3. **Preset↔extension pairing check**: `--preset linear` without
+   `--extension linear` exits 4 with the documented message
+   (PMO-76 §C1 — "Behavior contract — Linear pairing").
+4. **MCP pre-flight**: when a preset/extension declares a required MCP
+   tool, attempt one read call before mutating the workspace; on
+   failure exit 3 with the `claude mcp add …` hint.
+5. **Exit-code remap**: directory conflict currently exits 1; Contract
+   C1 specifies exit 5. Either remap upstream or accept the divergence
+   in the contract document.
+6. **`--dry-run`, `-v/-vv`, `--all-agents`, `--target <path>` flags** —
+   see PMO-76 §C1 for the full schema.
+
+### Tracking
+
+* Contract test: `tests/cli/test_init_contract.py` (T047) — every
+  assertion above is encoded as an `xfail(strict=False)` and will flip
+  to green automatically once upstream merges.
+* Upstream PR: **TODO — open against `github/spec-kit` main once the
+  Phase 4 vendor refresh stabilises.** Link will be added here.
+* Until upstream merges, the Linear extension's `before_specify` hook
+  performs the pairing and MCP pre-flight checks locally (no patch to
+  `src/specify_cli/` — the validation lives behind the extension API).
+
+### Workaround for end users today
+
+```bash
+# Works today against upstream v0.8.10 with this fork's bundled preset:
+specify init --ai claude --preset linear --here
+# Then in the new project, install the linear extension:
+specify extension install linear
+```
+
+Once the upstream PR lands, the documented one-shot form will work:
+
+```bash
+specify init --ai claude --preset linear --extension linear --here
+```

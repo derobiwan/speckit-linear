@@ -1,0 +1,48 @@
+// Markdownlint configuration for the speckit-linear-skills fork.
+//
+// We disable the rules that conflict with spec-kit conventions or with
+// upstream-vendored content (Constitution P1):
+//
+//   * MD013 (line-length) — vendored docs/* files use long lines from
+//     upstream; rewrapping them would diverge from the pinned tag.
+//   * MD041 (first-line-heading) — every command template starts with
+//     YAML frontmatter (`description:`); the first heading is `##`
+//     (matching the spec-kit convention upstream uses for templates).
+//
+// `ignores` mirrors the vendored exclude in .pre-commit-config.yaml so
+// the maintainer doesn't have to maintain two regex copies.
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD041": false,
+    // MD024 (no-duplicate-heading) is fine for the Keep-A-Changelog
+    // structure as long as duplicates are scoped to their own version
+    // section — "Added" under [1.0.0] and "Added" under [0.6.0] is
+    // expected and idiomatic.
+    "MD024": { "siblings_only": true }
+  },
+  "ignores": [
+    "src/specify_cli/**",
+    "templates/commands/**",
+    "integrations/**",
+    "extensions/git/**",
+    "extensions/selftest/**",
+    "extensions/template/**",
+    "presets/lean/**",
+    "presets/scaffold/**",
+    "presets/self-test/**",
+    "scripts/bash/**",
+    "scripts/powershell/**",
+    // Top-level docs vendored from upstream (not in their own subdirs).
+    "extensions/*.md",
+    "presets/*.md",
+    "workflows/*.md",
+    "tests/cli/fixtures/v051-sample-repo/**",
+    "tests/hooks/**",
+    "docs/**",
+    ".venv/**",
+    "build/**",
+    "dist/**"
+  ]
+}

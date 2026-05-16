@@ -1,0 +1,41 @@
+# Linear extension runtime configuration template.
+#
+# Copied to `.specify/config/linear.yml` on `specify init --extension linear`.
+# Maps to Data Model E9 (linear-config.yml) in the implementation plan.
+
+# Workspace identifier. Optional — when unset, the Linear MCP server uses
+# the workspace of the authenticated user.
+workspace: ""
+
+# Default team. Optional — when unset, the first team returned by
+# list_teams is used.
+team: ""
+
+# Product project name. The active project where all feature artifacts
+# (spec, plan, tasks, etc.) are persisted. This is also recorded in
+# `.specify/config/linear.md` for backward compatibility with the
+# documented "Find Active Feature" pattern.
+product_project: ""
+
+# Label conventions. Do not change without coordinating with the rest of
+# the workflow — these names are baked into the preset overrides.
+labels:
+  type_prefix: "speckit:"
+  feature_prefix: "feature:"
+
+# Bounded retry policy (Research R3, Contract C4).
+retry:
+  max_attempts: 3
+  initial_backoff_seconds: 1.0
+  jitter_percent: 0.25
+  transient_http_statuses: [429, 500, 502, 503, 504]
+  request_timeout_seconds: 30.0
+
+# Logging (Contract C5).
+logging:
+  # Path is relative to the project root.
+  log_dir: ".specify/logs"
+  max_bytes: 10485760  # 10 MB per file
+  backup_count: 5
+  # File logger is always DEBUG; stderr verbosity is controlled by
+  # SPECIFY_VERBOSITY env var (0=WARN, 1=INFO, 2=DEBUG).

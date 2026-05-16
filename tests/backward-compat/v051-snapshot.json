@@ -1,0 +1,65 @@
+{
+  "speckit:spec": {
+    "title": "[SPEC] 053: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:spec"],
+    "description": "# Feature Specification: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Authentication\n\n**Feature**: `053-remote-mcp-multitenant`\n**Product Project**: `Informatica MDM MCP Server`\n**Created**: 2026-04-27\n**Status**: Draft\n\n## Clarifications\n\n### Session 2026-04-29\n\n* Q: Which mechanism will the server use to obtain a user-scoped Informatica IDS-SESSION-ID for each authenticated MCP user? -> A: Federated SSO + token exchange via SAP IAS.\n* Q: Which BTP runtime should be the deployment target? -> A: SAP BTP Cloud Foundry (Node.js buildpack).\n* Q: Where do per-user IAS refresh tokens and Informatica IDS-SESSION-IDs live? -> A: In-memory per app instance with sticky routing.\n* Q: Long-term status of stdio transport? -> A: Keep stdio for local development only.\n* Q: How do MCP clients become OAuth clients of the server? -> A: Pre-registered clients in SAP IAS with OIDC discovery.\n\n## Functional Requirements (excerpt)\n\n* FR-001: HTTP Streamable transport in production.\n* FR-007: Authenticate users against SAP IAS via OIDC.\n* FR-009: Per-user secrets in process memory only; no persistence.\n* FR-011b: Cloud Foundry route stickiness via JSESSIONID.\n\n## Success Criteria\n\n* SC-001: New user reaches first authorised tool call within 5 minutes.\n* SC-002: At least 10 distinct users connected concurrently with isolated state.",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:plan": {
+    "title": "[PLAN] 053: Implementation Plan",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:plan"],
+    "description": "# Implementation Plan: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth\n\n**Feature**: `053-remote-mcp-multitenant` | **Date**: 2026-04-29\n**Product Project**: `Informatica MDM MCP Server`\n\n## Summary\n\nAdd a Streamable HTTP transport to the existing Node.js MCP server so it can be deployed once on SAP BTP Cloud Foundry and serve many users concurrently. Each user authenticates via SAP IAS (OIDC); the server exchanges the IAS assertion for a per-user Informatica IDS-SESSION-ID via IDMC's IAS federation trust.\n\n## Technical Context\n\n**Language/Version**: TypeScript 5.7, Node.js 20 LTS\n**Primary Dependencies**: @modelcontextprotocol/sdk ^1.12, hono, zod, openid-client, pino.\n**Storage**: None. All per-user state is in-memory.\n**Testing**: vitest. New tests cover HTTP transport, IAS OIDC flow, IDMC federation token exchange.\n**Target Platform**: SAP BTP Cloud Foundry (Node.js buildpack).\n\n## Constitution Check\n\nAll 10 principles pass with one accepted deviation (P6 MELT — Metrics and Traces deferred to v1.1, ADR-053-002 documents the deviation).\n\n## Phases\n\n0. Research — IAS<->IDMC federation, MCP Streamable HTTP semantics, CF sticky routing.\n1. Design & Contracts — entities, HTTP endpoints, quickstart guide.\n2. Tasks — decomposed into 50 tasks across 8 milestones.",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:research": {
+    "title": "[RESEARCH] 053: Technical Research",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:research"],
+    "description": "# Technical Research: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth\n\n**Feature**: `053-remote-mcp-multitenant`\n\n## R-1: SAP IAS to Informatica IDMC Federation\n\n**Decision**: Use the OIDC + SAML 2.0 Bearer Assertion Grant (RFC 7522) federation pattern.\n\n**Rationale**: This is the IDMC-supported pattern for enterprise SSO. Satisfies FR-008 (no raw passwords), SC-003 (audit log shows real user), and SC-009 (no password ever crosses the MCP boundary).\n\n**Alternatives considered**: OAuth 2.0 Token Exchange (RFC 8693, IDMC does not expose endpoints); IDMC native OIDC client (undocumented API); IDMC personal access tokens (high onboarding friction).\n\n## R-2: MCP Streamable HTTP Transport in TS SDK\n\n**Decision**: Use StreamableHTTPServerTransport from @modelcontextprotocol/sdk.\n\n## R-3: SAP BTP Cloud Foundry Sticky Session Routing\n\n**Decision**: Use the JSESSIONID cookie. The CF gorouter natively recognises this cookie name and routes subsequent requests with the same value to the same backend instance.",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:data-model": {
+    "title": "[DATA-MODEL] 053: Entity Definitions",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:data-model"],
+    "description": "# Data Model: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth\n\n**Feature**: `053-remote-mcp-multitenant`\n\nThis document defines all in-process entities introduced or modified by this feature. There is no persistent data store; all entities live in process memory.\n\n## E1: McpSession\n\nA long-lived MCP session bound to one authenticated user. Created on the first authenticated MCP request, destroyed on logout, idle timeout, or app instance shutdown. Pinned to one CF instance via the JSESSIONID cookie.\n\n## E2: EndUserIdentity\n\nThe authenticated end-user identity resolved from SAP IAS (HTTP transport) or environment variables (stdio transport).\n\n## E3: InformaticaUserSession\n\nThe per-user IDMC IDS-SESSION-ID derived from the user's IAS identity.\n\n## E4: RegisteredMcpClient\n\nA pre-registered OAuth client representing one MCP client product (e.g., Claude Desktop). Loaded at server startup from configuration.\n\n## E5: ToolInvocationRecord\n\nA per-tool-call audit-relevant record emitted to the structured log stream.",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:contract": {
+    "title": "[CONTRACT] 053: API Contract",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:contract"],
+    "description": "# API Contract: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth\n\n**Feature**: `053-remote-mcp-multitenant`\n\nThis issue defines all HTTP endpoints exposed by the MCP server in HTTP transport mode.\n\n## Endpoint Summary\n\n| Method | Path | Purpose | Auth | Streaming |\n|--------|------|---------|------|-----------|\n| GET | /.well-known/oauth-authorization-server | RFC 8414 OAuth metadata | Public | No |\n| GET | /.well-known/oauth-protected-resource | RFC 9728 protected-resource metadata | Public | No |\n| POST | /mcp | MCP client->server JSON-RPC requests | Bearer | SSE upgrade |\n| GET | /mcp | MCP server->client SSE stream | Bearer | Yes |\n| DELETE | /mcp | Terminate an MCP session | Bearer | No |\n| GET | /health | Liveness probe | Public | No |\n| GET | /ready | Readiness probe | Public | No |\n\n## Error Code Surface\n\nAUTH_NO_TOKEN (401), AUTH_INVALID_TOKEN (401), AUTH_UNKNOWN_CLIENT (401), IDMC_FEDERATION_FAILED (502), IDMC_USER_DISABLED (403), MCP_SESSION_NOT_FOUND (404).",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:quickstart": {
+    "title": "[QUICKSTART] 053: Integration Guide",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:quickstart"],
+    "description": "# Quickstart: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth\n\n**Feature**: `053-remote-mcp-multitenant`\n\nThis document covers four audiences: end users (signing in), MCP-client integrators (registering a new client), operations (deploying), and developers (running locally).\n\n## 1. End-User Quickstart\n\nPrerequisite: Operations has already deployed the server and registered your MCP client product in SAP IAS. You should have the MCP server URL and a valid SAP IAS account.\n\nSteps (Claude Desktop example):\n\n1. Open Claude Desktop -> Settings -> Connectors.\n2. Add a new MCP server: paste the URL.\n3. Claude Desktop fetches /.well-known/oauth-authorization-server, discovers your IAS tenant, and opens a browser for sign-in.\n4. Sign in to SAP IAS. Approve the consent screen.\n5. Browser redirects back to Claude Desktop, which receives an OAuth access token.\n6. Try a tool: ask Claude to list the materials you can see.\n\nExpected first-tool-call time: under 5 minutes from a clean install (per SC-001).",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:checklist": {
+    "title": "[CHECKLIST] 053: Requirements Quality",
+    "labels": ["feature:053-remote-mcp-multitenant", "speckit:checklist"],
+    "description": "# Specification Quality Checklist: Remote MCP Server with HTTP Streaming, BTP Deployment, and Per-User Auth\n\n**Purpose**: Validate specification completeness and quality before proceeding to planning\n**Created**: 2026-04-27\n\n## Content Quality\n\n- [X] No implementation details (languages, frameworks, APIs)\n- [X] Focused on user value and business needs\n- [X] Written for non-technical stakeholders\n- [X] All mandatory sections completed\n\n## Requirement Completeness\n\n- [X] No clarification markers remain\n- [X] Requirements are testable and unambiguous\n- [X] Success criteria are measurable\n- [X] Success criteria are technology-agnostic\n- [X] All acceptance scenarios are defined\n- [X] Edge cases are identified\n- [X] Scope is clearly bounded\n- [X] Dependencies and assumptions identified\n\n## Feature Readiness\n\n- [X] All functional requirements have clear acceptance criteria\n- [X] User scenarios cover primary flows\n- [X] Feature meets measurable outcomes defined in Success Criteria\n- [X] No implementation details leak into specification\n\n## Validation Notes\n\nIteration 1 (2026-04-27): All checklist items pass on initial validation.",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  },
+  "speckit:task": {
+    "title": "T033 [P] [US5] Write unit tests for audit and export tools in tests/unit/tools/",
+    "labels": ["feature:043-mdm-field-role-mcp", "parallelizable", "speckit:task"],
+    "description": "## Task\n\nWrite unit tests for audit_permissions and export_config tool handlers.\n\n## Files to Create\n\n`tests/unit/tools/audit-permissions.test.ts`:\n\n* Test full matrix generation (roles x columns)\n* Test sensitive_columns parameter highlights correctly\n* Test without sensitive_columns returns clean matrix\n* Test role_names filter\n\n`tests/unit/tools/export-config.test.ts`:\n\n* Test JSON format returns complete RoleDetails array\n* Test CSV format returns valid flat table\n* Test role_names filter restricts output\n\n## Dependencies\n\nDepends on: T022, T023, T012\n\n## User Story: US5, US6\n\n## Acceptance Criteria\n\n* Both audit and export tools tested\n* Sensitive column highlighting verified\n* JSON and CSV output formats verified",
+    "priority": {"value": 2, "name": "High"},
+    "state": "Done"
+  },
+  "speckit:constitution": {
+    "title": "[CONSTITUTION] Project Constitution",
+    "labels": ["speckit:constitution"],
+    "description": "# Application Development Constitution\n\n## Principles\n\n### Principle 1: Test-First Development\n\nAll production code MUST be accompanied by automated tests written before or alongside the implementation. The project follows the test pyramid model: Unit tests (70%), Integration tests (20%), End-to-end tests (10%).\n\nCoverage targets: Business logic and algorithms (90% minimum), Infrastructure/glue code (70% minimum), Critical paths (100%).\n\n### Principle 2: Security by Design\n\nSecurity MUST be addressed from the design phase, not retrofitted. All code MUST comply with the OWASP Top 10 and follow shift-left security practices. Pre-commit security scanning is MANDATORY.\n\n### Principle 3: Simplicity and Maintainability\n\nCode MUST favor simplicity over cleverness. KISS, YAGNI, DRY, SOLID principles apply.\n\n### Principle 4: Clean Architecture and Separation of Concerns\n\nApplications MUST separate business logic from infrastructure, frameworks, and external services. 12-Factor compliant. ADRs for significant architectural decisions.\n\n### Principle 5: Continuous Integration and Automated Quality Gates\n\nAll code changes MUST pass through an automated CI/CD pipeline before reaching production. No direct commits to main. PR workflow MANDATORY.\n\n**Version**: 1.2.0\n**Ratified**: 2026-02-07\n**Last Amended**: 2026-02-08",
+    "priority": {"value": 0, "name": "No priority"},
+    "state": "Backlog"
+  }
+}

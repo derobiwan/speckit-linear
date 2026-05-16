@@ -1,0 +1,90 @@
+---
+# T070 — Test budget verification (SC-008).
+#
+# Runs the fork-authored test suite (unit + contract + integration +
+# governance + perf) and records the wall-clock to
+# tests/perf/.last-duration-seconds so the in-repo
+# test_recorded_duration_under_budget test can assert it on the next
+# run. The 30-agent install smoke matrix and pre-existing-known-
+# failing tests are deliberately excluded — they have their own
+# workflows and budgets.
+#
+# The R7 / SC-008 budget is 5 minutes total wall-clock; this workflow
+# fails the build if the timed run exceeds that threshold.
+name: test-suite
+on:
+  push:
+    branches:
+      - main
+      - 'upstream-sync-*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Install dependencies
+        run: |
+          uv venv .venv
+          . .venv/bin/activate
+          uv pip install -e ".[dev,linear]"
+
+      - name: Run timed test suite
+        id: run-tests
+        env:
+          SPECKIT_PERF_SELF_TIME: '0'
+        run: |
+          . .venv/bin/activate
+          start_ns=$(date +%s.%N)
+          set +e
+          pytest --quiet \
+            --ignore=tests/smoke/test_30_agent_matrix.py \
+            --ignore=tests/perf/test_suite_duration.py
+          rc=$?
+          set -e
+          end_ns=$(date +%s.%N)
+          duration=$(python3 -c "print(f'{${end_ns} - ${start_ns}:.2f}')")
+          mkdir -p tests/perf
+          printf '%s\n' "$duration" >> tests/perf/.last-duration-seconds
+          echo "duration=${duration}" >> "$GITHUB_OUTPUT"
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          exit $rc
+
+      - name: Verify SC-008 budget (≤ 5 min)
+        env:
+          DURATION: ${{ steps.run-tests.outputs.duration }}
+        run: |
+          python3 -c "
+          import os, sys
+          duration = float(os.environ['DURATION'])
+          budget = 5 * 60
+          if duration >= budget:
+              sys.exit(f'SC-008: suite wall-clock {duration:.1f}s exceeds {budget}s budget')
+          print(f'SC-008: suite wall-clock {duration:.1f}s (< {budget}s budget)')
+          "
+
+      - name: Upload duration artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-suite-duration
+          path: tests/perf/.last-duration-seconds
+          retention-days: 30
