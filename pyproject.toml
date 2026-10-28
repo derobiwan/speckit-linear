@@ -53,7 +53,7 @@ packages = ["src/specify_cli"]
 [project.optional-dependencies]
 # Upstream test extras retained verbatim.
 test = [
-    "pytest>=7.0",
+    "pytest>=9.0.3",
     "pytest-cov>=4.0",
 ]
 # Linear extension runtime dependencies — only loaded when the Linear preset/extension is active.
@@ -63,10 +63,10 @@ linear = [
 ]
 # Developer extras — added by this fork; required to run the full test matrix.
 dev = [
-    "pytest>=8",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
-    "vcrpy>=6",
+    "vcrpy>=8.2.1",
     "ruff>=0.5",
 ]
 
